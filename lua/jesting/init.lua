@@ -1,8 +1,8 @@
 local popup = require("plenary.popup")
 local M = {}
 
-local inline_testing_augroup = vim.api.nvim_create_augroup("InlineTesting", { clear = true })
-local inline_testing_ns = vim.api.nvim_create_namespace("InlineTesting")
+local inline_testing_augroup = vim.api.nvim_create_augroup("Jesting", { clear = true })
+local inline_testing_ns = vim.api.nvim_create_namespace("Jesting")
 local inline_testing_results = {}
 local test_results_winnr = nil
 
@@ -11,18 +11,12 @@ local capturing_logs = false
 local console_log_win = nil
 local console_log_buf = nil
 
---unnatach the test runner from the buffer and clear the namespace
--- vim.api.nvim_create_user_command("UnattachInlineTesting", function()
 function M.unattach()
 	local bufnr = vim.api.nvim_get_current_buf()
 	local buf_name = vim.api.nvim_buf_get_name(bufnr)
 	M.clear_namespace_for_current_buffer(bufnr)
 	vim.api.nvim_clear_autocmds({ group = inline_testing_augroup, pattern = buf_name })
 end
-
--- vim.api.nvim_create_user_command("OpenTestResultsPanel", function()
--- 	M.create_popup_of_test_results(inline_testing_results)
--- end, {})
 
 function M.attach(cmd)
 	local buf_name = vim.api.nvim_buf_get_name(0)
