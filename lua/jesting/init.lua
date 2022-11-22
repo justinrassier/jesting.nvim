@@ -1,6 +1,10 @@
 local popup = require("plenary.popup")
 local M = {}
 
+local config = {
+	console_log_window_width = 80,
+}
+
 local inline_testing_augroup = vim.api.nvim_create_augroup("Jesting", { clear = true })
 local inline_testing_ns = vim.api.nvim_create_namespace("Jesting")
 local inline_testing_results = {}
@@ -23,7 +27,7 @@ function M.attach(cmd)
 	vim.api.nvim_create_autocmd("BufWritePost", {
 		group = inline_testing_augroup,
 		pattern = buf_name,
-		callback = function()
+		callback = function(args)
 			inline_testing_results = {}
 			M.clear_console_log_stuff()
 
@@ -101,8 +105,8 @@ function M.attach(cmd)
 						end
 
 						M.open_console_log_win()
-						M.clear_namespace_for_current_buffer(bufnr)
-						M.add_extmark_to_test_result(inline_testing_results)
+						M.clear_namespace_for_current_buffer(args.buf)
+						M.add_extmark_to_test_result(args.buf, inline_testing_results)
 					end
 				end,
 			})
@@ -153,8 +157,7 @@ function M.select_menu_item()
 	vim.api.nvim_win_set_cursor(0, { test_result.line_num + 1, 0 })
 end
 
-function M.add_extmark_to_test_result(test_results)
-	local bufnr = vim.api.nvim_get_current_buf()
+function M.add_extmark_to_test_result(bufnr, test_results)
 	local diagnostics_tbl = {}
 	for _, result in ipairs(test_results) do
 		if result.passed == true then
@@ -204,7 +207,7 @@ function M.open_console_log_win()
 	if #console_logs > 0 then
 		local current_win = vim.api.nvim_get_current_win()
 		if console_log_win == nil then
-			vim.fn.execute("80 vnew")
+			vim.fn.execute(config.console_log_window_width .. " vnew")
 			console_log_win = vim.api.nvim_get_current_win()
 		end
 		if console_log_buf == nil then
@@ -220,4 +223,8 @@ function M.open_console_log_win()
 	end
 end
 
+function M.setup(user_config)
+	-- override default config with user config
+	config = vim.tbl_deep_extend("force", config, user_config)
+end
 return M
