@@ -20,6 +20,7 @@ function M.unattach()
 	local buf_name = vim.api.nvim_buf_get_name(bufnr)
 	M.clear_namespace_for_current_buffer(bufnr)
 	vim.api.nvim_clear_autocmds({ group = inline_testing_augroup, pattern = buf_name })
+	vim.notify("Jesting unattached from " .. buf_name, vim.log.levels.INFO, { title = "Jesting" })
 end
 
 function M.attach(cmd)
@@ -112,6 +113,8 @@ function M.attach(cmd)
 			})
 		end,
 	})
+
+	vim.notify("Jesting attached to " .. buf_name, vim.log.levels.INFO, { title = "Jesting" })
 end
 
 function M.create_popup_of_test_results(test_result)

@@ -30,4 +30,8 @@ vim.api.nvim_create_user_command("JestingAttachNx", function()
 	jesting.attach(cmd)
 end, {})
 
+vim.api.nvim_create_user_command("JestingCloseConsoleLogWindow", function()
+	jesting.clear_console_log_stuff()
+end, {})
+
 vim.api.nvim_create_user_command("JestingUnattach", "lua require('jesting').unattach()", {})
