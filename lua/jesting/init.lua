@@ -78,6 +78,26 @@ function M.attach(cmd)
 						-- get the test results
 						local testResults = results.testResults[1].assertionResults
 
+						if
+							#results.testResults == 1
+							and string.match(results.testResults[1].message, "Test suite failed to run")
+						then
+							-- concat the cmd table together into a single string
+							local cmd_str = ""
+							for _, v in ipairs(cmd) do
+								cmd_str = cmd_str .. v .. " "
+							end
+
+							vim.notify(
+								"Jesting failed to run " .. cmd_str .. "\n" .. results.testResults[1].message,
+								vim.log.levels.ERROR,
+								{ title = "Jesting" }
+							)
+
+							M.clear_namespace_for_current_buffer(bufnr)
+							return
+						end
+
 						-- -- make a map of test name to result
 						local testMap = {}
 						for _, result in ipairs(testResults) do
