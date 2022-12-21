@@ -23,7 +23,7 @@ function M.unattach()
 	vim.notify("Jesting unattached from " .. buf_name, vim.log.levels.INFO, { title = "Jesting" })
 end
 
-function M.attach(cmd)
+function M.attach(cmd, single_test)
 	local buf_name = vim.api.nvim_buf_get_name(0)
 	vim.api.nvim_create_autocmd("BufWritePost", {
 		group = inline_testing_augroup,
@@ -43,7 +43,12 @@ function M.attach(cmd)
 				local text = { "⌛" }
 
 				if test ~= nil then
-					vim.api.nvim_buf_set_extmark(bufnr, inline_testing_ns, line_num, 0, { virt_text = { text } })
+					if single_test and test == single_test then
+						vim.api.nvim_buf_set_extmark(bufnr, inline_testing_ns, line_num, 0, { virt_text = { text } })
+						break
+					else
+						vim.api.nvim_buf_set_extmark(bufnr, inline_testing_ns, line_num, 0, { virt_text = { text } })
+					end
 				end
 				line_num = line_num + 1
 			end
@@ -113,7 +118,7 @@ function M.attach(cmd)
 							local test = M.get_matching_it_statements_for_line(line)
 							if test ~= nil then
 								local result = testMap[test]
-								if result ~= nil then
+								if result ~= nil and (result.status == "passed" or result.status == "failed") then
 									table.insert(inline_testing_results, {
 										name = test,
 										line_num = line_num,
