@@ -74,3 +74,9 @@ vim.api.nvim_create_user_command("JestingCloseConsoleLogWindow", function()
 end, {})
 
 vim.api.nvim_create_user_command("JestingUnattach", "lua require('jesting').unattach()", {})
+
+vim.api.nvim_create_user_command("JestingRunInTerminal", function()
+	local current_buffer = vim.api.nvim_buf_get_name(0)
+	local project_name = utils.get_project_name_from_path(current_buffer)
+	jesting.run_nx_test_for_file_in_terminal(project_name)
+end, {})

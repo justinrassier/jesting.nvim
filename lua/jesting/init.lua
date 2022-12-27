@@ -3,6 +3,8 @@ local M = {}
 
 local config = {
 	console_log_window_width = 80,
+	integrated_terminal_size = 80,
+	integrated_terminal_orientation = "vertical",
 }
 
 local inline_testing_augroup = vim.api.nvim_create_augroup("Jesting", { clear = true })
@@ -14,6 +16,21 @@ local console_logs = {}
 local capturing_logs = false
 local console_log_win = nil
 local console_log_buf = nil
+
+function M.run_nx_test_for_file_in_terminal(project_name)
+	-- get file name for the current buffer
+	local current_buffer = vim.api.nvim_buf_get_name(0)
+
+	-- build command string
+	local test_command = "nx test " .. project_name .. " --testFile " .. current_buffer .. " --watch"
+
+	print(vim.inspect(config))
+	local terminal_orientation = config.integrated_terminal_orientation == "vertical" and "vnew" or "new"
+	-- execute the nx command in a new terminal buffer
+	vim.fn.execute(
+		tostring(config.integrated_terminal_size) .. " " .. terminal_orientation .. " | terminal " .. test_command
+	)
+end
 
 function M.unattach()
 	local bufnr = vim.api.nvim_get_current_buf()
