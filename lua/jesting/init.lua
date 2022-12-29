@@ -24,7 +24,6 @@ function M.run_nx_test_for_file_in_terminal(project_name)
 	-- build command string
 	local test_command = "nx test " .. project_name .. " --testFile " .. current_buffer .. " --watch"
 
-	print(vim.inspect(config))
 	local terminal_orientation = config.integrated_terminal_orientation == "vertical" and "vnew" or "new"
 	-- execute the nx command in a new terminal buffer
 	vim.fn.execute(
