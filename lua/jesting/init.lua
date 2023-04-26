@@ -75,7 +75,8 @@ function M.attach(cmd, single_test)
 				on_stderr = function(_, data)
 					for _, result in ipairs(data) do
 						local match_console_marker = string.match(result, "console.log")
-						if match_console_marker ~= nil then
+						local match_console_warn_marker = string.match(result, "console.warn")
+						if match_console_marker or match_console_warn_marker ~= nil then
 							capturing_logs = true
 						end
 						-- if the string has has 'at' and ends with a colon, it's a stack trace
