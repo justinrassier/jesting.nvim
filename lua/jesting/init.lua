@@ -17,6 +17,23 @@ local capturing_logs = false
 local console_log_win = nil
 local console_log_buf = nil
 
+M.buf_to_status_map = {}
+local STATUS_MAP = {
+	["ATTACHED"] = "🔗",
+	["RUNNING"] = "⏳",
+	["PASSED"] = "✅",
+	["FAILED"] = "❌",
+}
+
+function M.lualine_status()
+	local current_buf_nr = vim.api.nvim_get_current_buf()
+	local jesting_status = M.buf_to_status_map[current_buf_nr]
+	if jesting_status then
+		return string.format("%s", jesting_status)
+	end
+	return ""
+end
+
 function M.run_nx_test_for_file_in_terminal(project_name)
 	-- get file name for the current buffer
 	local current_buffer = vim.api.nvim_buf_get_name(0)
@@ -34,6 +51,7 @@ end
 function M.unattach()
 	local bufnr = vim.api.nvim_get_current_buf()
 	local buf_name = vim.api.nvim_buf_get_name(bufnr)
+	M.buf_to_status_map[bufnr] = nil
 	M.clear_namespace_for_current_buffer(bufnr)
 	vim.api.nvim_clear_autocmds({ group = inline_testing_augroup, pattern = buf_name })
 	vim.notify("Jesting unattached from " .. buf_name, vim.log.levels.INFO, { title = "Jesting" })
@@ -41,10 +59,13 @@ end
 
 function M.attach(cmd, single_test)
 	local buf_name = vim.api.nvim_buf_get_name(0)
+	local buf_nr = vim.api.nvim_get_current_buf()
+	M.buf_to_status_map[buf_nr] = STATUS_MAP["ATTACHED"]
 	vim.api.nvim_create_autocmd("BufWritePost", {
 		group = inline_testing_augroup,
 		pattern = buf_name,
 		callback = function(args)
+			M.buf_to_status_map[buf_nr] = STATUS_MAP["RUNNING"]
 			inline_testing_results = {}
 			M.clear_console_log_stuff()
 
@@ -145,6 +166,20 @@ function M.attach(cmd, single_test)
 								end
 							end
 							line_num = line_num + 1
+						end
+
+						local any_failures = false
+						for _, result in ipairs(inline_testing_results) do
+							if not result.passed then
+								any_failures = true
+								break
+							end
+						end
+
+						if any_failures then
+							M.buf_to_status_map[bufnr] = STATUS_MAP["FAILED"]
+						else
+							M.buf_to_status_map[bufnr] = STATUS_MAP["PASSED"]
 						end
 
 						M.open_console_log_win()
