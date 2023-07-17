@@ -24,6 +24,8 @@ vim.api.nvim_create_user_command("JestingAttachNx", function()
 		"--testFile=" .. current_buffer,
 		"--json",
 		"--outputFile=/tmp/results.json",
+		"--codeCoverage",
+		"false",
 		"--skip-nx-cache",
 	}
 

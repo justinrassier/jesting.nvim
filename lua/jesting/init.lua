@@ -17,6 +17,8 @@ local capturing_logs = false
 local console_log_win = nil
 local console_log_buf = nil
 
+local std_out_messages = {}
+
 M.buf_to_status_map = {}
 local STATUS_MAP = {
 	["ATTACHED"] = "🔗",
@@ -93,6 +95,10 @@ function M.attach(cmd, single_test)
 			vim.fn.jobstart(cmd, {
 				stdout_buffered = true,
 				--nx sends output to stderr when uing the --json flag
+				on_stdout = function(j, data)
+					std_out_messages = data
+				end,
+
 				on_stderr = function(_, data)
 					for _, result in ipairs(data) do
 						local match_console_marker = string.match(result, "console.log")
@@ -100,6 +106,7 @@ function M.attach(cmd, single_test)
 						if match_console_marker or match_console_warn_marker ~= nil then
 							capturing_logs = true
 						end
+
 						-- if the string has has 'at' and ends with a colon, it's a stack trace
 						if string.match(result, "^.* at .+:") ~= nil then
 							capturing_logs = false
@@ -110,7 +117,15 @@ function M.attach(cmd, single_test)
 						end
 					end
 				end,
-				on_exit = function()
+				on_exit = function(data, code)
+					-- first check to see if we have the circular JSON serialization error
+					for _, result in ipairs(std_out_messages) do
+						if string.match(result, "starting at object with constructor 'Object'") then
+							vim.notify(vim.inspect(std_out_messages), vim.log.levels.ERROR, { title = "Jesting" })
+							return
+						end
+					end
+
 					-- read in JSON file
 					local file = io.open("/tmp/results.json", "r")
 					if file ~= nil then
