@@ -70,6 +70,7 @@ function M.attach(cmd, single_test)
 	-- force killing any running jobs
 	if jobId ~= nil then
 		vim.fn.jobstop(jobId)
+		jobId = nil
 	end
 	local buf_name = vim.api.nvim_buf_get_name(0)
 	local buf_nr = vim.api.nvim_get_current_buf()
