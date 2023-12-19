@@ -80,6 +80,7 @@ vim.api.nvim_create_user_command("JestingAttachSingleTestNx", function()
 		"--json",
 		"--outputFile=/tmp/results.json",
 		"--skip-nx-cache",
+		"--watch",
 	}
 
 	jesting.attach(cmd, it_name)
