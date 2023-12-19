@@ -61,6 +61,7 @@ function M.unattach()
 
 	if jobId ~= nil then
 		vim.fn.jobstop(jobId)
+		jobId = nil
 	end
 	vim.notify("Jesting unattached from " .. buf_name, vim.log.levels.INFO, { title = "Jesting" })
 end
@@ -126,10 +127,12 @@ function M.attach(cmd, single_test)
 
 				on_stderr = function(_, data)
 					for _, result in ipairs(data) do
+						-- If the output has the following, then the test run is complete for this iteration of the watcher
 						if string.match(result, "Test results written to") then
 							M.on_test_run_complete(bufnr)
 						end
 
+						-- Capture console.log and console.warn messages for display in a window
 						local match_console_marker = string.match(result, "console.log")
 						local match_console_warn_marker = string.match(result, "console.warn")
 						if match_console_marker or match_console_warn_marker ~= nil then
@@ -147,125 +150,14 @@ function M.attach(cmd, single_test)
 					end
 				end,
 				on_exit = function(data, code)
-					-- -- first check to see if we have the circular JSON serialization error
-					-- for _, result in ipairs(std_out_messages) do
-					-- 	if string.match(result, "starting at object with constructor 'Object'") then
-					-- 		vim.notify(vim.inspect(std_out_messages), vim.log.levels.ERROR, { title = "Jesting" })
-					-- 		return
-					-- 	end
-					-- end
-					--
-					-- -- read in JSON file
-					-- local file = io.open("/tmp/results.json", "r")
-					-- if file ~= nil then
-					-- 	local json = file:read("*all")
-					-- 	local results = vim.fn.json_decode(json)
-					-- 	file:close()
-					--
-					-- 	-- get the test results
-					-- 	local testResults = results.testResults[1].assertionResults
-					--
-					-- 	if
-					-- 		#results.testResults == 1
-					-- 		and string.match(results.testResults[1].message, "Test suite failed to run")
-					-- 	then
-					-- 		-- concat the cmd table together into a single string
-					-- 		local cmd_str = ""
-					-- 		for _, v in ipairs(cmd) do
-					-- 			cmd_str = cmd_str .. v .. " "
-					-- 		end
-					--
-					-- 		vim.notify(
-					-- 			"Jesting failed to run " .. cmd_str .. "\n" .. results.testResults[1].message,
-					-- 			vim.log.levels.ERROR,
-					-- 			{ title = "Jesting" }
-					-- 		)
-					--
-					-- 		M.clear_namespace_for_current_buffer(bufnr)
-					-- 		return
-					-- 	end
-					--
-					-- 	-- -- make a map of test name to result
-					-- 	local testMap = {}
-					-- 	for _, result in ipairs(testResults) do
-					-- 		-- table.insert(testMap, {name = result.title, status = result.status})
-					-- 		testMap[result.title] =
-					-- 			{ status = result.status, error_message = result.failureMessages[1] }
-					-- 	end
-					--
-					-- 	-- assemble the test results in to the inline_testing_results table
-					-- 	line_num = 0
-					-- 	for _, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
-					-- 		-- get the test name from the it statement
-					-- 		local test = M.get_matching_it_statements_for_line(line)
-					-- 		if test ~= nil then
-					-- 			local result = testMap[test]
-					-- 			if result ~= nil and (result.status == "passed" or result.status == "failed") then
-					-- 				table.insert(inline_testing_results, {
-					-- 					name = test,
-					-- 					line_num = line_num,
-					-- 					passed = result.status == "passed",
-					-- 					error_message = result.error_message,
-					-- 				})
-					-- 			end
-					-- 		end
-					-- 		line_num = line_num + 1
-					-- 	end
-					--
-					-- 	local any_failures = false
-					-- 	for _, result in ipairs(inline_testing_results) do
-					-- 		if not result.passed then
-					-- 			any_failures = true
-					-- 			break
-					-- 		end
-					-- 	end
-					--
-					-- 	if any_failures then
-					-- 		M.buf_to_status_map[bufnr] = STATUS_MAP["FAILED"]
-					-- 	else
-					-- 		M.buf_to_status_map[bufnr] = STATUS_MAP["PASSED"]
-					-- 	end
-					--
-					-- 	M.open_console_log_win()
-					-- 	M.clear_namespace_for_current_buffer(args.buf)
-					-- 	M.add_extmark_to_test_result(args.buf, inline_testing_results)
-					-- end
+					-- do nothing now as we are using the --watch flag
+					jobId = nil
 				end,
 			})
 		end,
 	})
 
 	vim.notify("Jesting attached to " .. buf_name, vim.log.levels.INFO, { title = "Jesting" })
-end
-
-function M.create_popup_of_test_results(test_result)
-	-- creat a new buffer
-	local bufnr = vim.api.nvim_create_buf(false, true)
-
-	-- assemble list of test results
-	local lines = {}
-	for _, result in ipairs(test_result) do
-		local text = result.passed and "✅" or "❌"
-		table.insert(lines, text .. " " .. result.name)
-	end
-
-	-- add a line of text
-	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
-
-	local width = 125
-	local height = 25
-	local borderchars = { "─", "│", "─", "│", "╭", "╮", "╯", "╰" }
-	-- open a window in the center of the screen
-	test_results_winnr, win = popup.create(bufnr, {
-		title = "Test Results",
-		line = math.floor(((vim.o.lines - height) / 2) - 1),
-		col = math.floor((vim.o.columns - width) / 2),
-		minwidth = width,
-		minheight = height,
-		borderchars = borderchars,
-	})
-
-	vim.api.nvim_buf_set_keymap(bufnr, "n", "<CR>", "<Cmd>lua require('jr.custom.commands').select_menu_item()<CR>", {})
 end
 
 function M.select_menu_item()
@@ -352,8 +244,10 @@ function M.setup(user_config)
 	config = vim.tbl_deep_extend("force", config, user_config)
 end
 
+--
+-- After test run is complete, read in the JSON file and parse the results
+--
 function M.on_test_run_complete(bufnr)
-	print("on_test_run_complete")
 	-- first check to see if we have the circular JSON serialization error
 	for _, result in ipairs(std_out_messages) do
 		if string.match(result, "starting at object with constructor 'Object'") then
@@ -435,3 +329,33 @@ function M.on_test_run_complete(bufnr)
 	end
 end
 return M
+
+-- function M.create_popup_of_test_results(test_result)
+-- 	-- creat a new buffer
+-- 	local bufnr = vim.api.nvim_create_buf(false, true)
+--
+-- 	-- assemble list of test results
+-- 	local lines = {}
+-- 	for _, result in ipairs(test_result) do
+-- 		local text = result.passed and "✅" or "❌"
+-- 		table.insert(lines, text .. " " .. result.name)
+-- 	end
+--
+-- 	-- add a line of text
+-- 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+--
+-- 	local width = 125
+-- 	local height = 25
+-- 	local borderchars = { "─", "│", "─", "│", "╭", "╮", "╯", "╰" }
+-- 	-- open a window in the center of the screen
+-- 	test_results_winnr, win = popup.create(bufnr, {
+-- 		title = "Test Results",
+-- 		line = math.floor(((vim.o.lines - height) / 2) - 1),
+-- 		col = math.floor((vim.o.columns - width) / 2),
+-- 		minwidth = width,
+-- 		minheight = height,
+-- 		borderchars = borderchars,
+-- 	})
+--
+-- 	vim.api.nvim_buf_set_keymap(bufnr, "n", "<CR>", "<Cmd>lua require('jr.custom.commands').select_menu_item()<CR>", {})
+-- end
