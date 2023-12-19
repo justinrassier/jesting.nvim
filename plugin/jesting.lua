@@ -1,6 +1,19 @@
 local jesting = require("jesting")
 local utils = require("jesting.utils")
 
+vim.api.nvim_create_user_command("JestingAttachApi", function()
+	local current_buffer = vim.api.nvim_buf_get_name(0)
+	local cmd = {
+		"npx",
+		"jest",
+		'--config="lib/jest.config.js"',
+		"--testPathPattern=" .. current_buffer,
+		"--json",
+		"--outputFile=/tmp/results.json",
+	}
+	jesting.attach(cmd)
+end, {})
+
 vim.api.nvim_create_user_command("JestingAttach", function()
 	local current_buffer = vim.api.nvim_buf_get_name(0)
 	local cmd = {
@@ -27,6 +40,7 @@ vim.api.nvim_create_user_command("JestingAttachNx", function()
 		"--codeCoverage",
 		"false",
 		"--skip-nx-cache",
+		"--watch",
 	}
 
 	jesting.attach(cmd)

@@ -19,6 +19,8 @@ local console_log_buf = nil
 
 local std_out_messages = {}
 
+local jobId = nil
+
 M.buf_to_status_map = {}
 local STATUS_MAP = {
 	["ATTACHED"] = "🔗",
@@ -56,13 +58,32 @@ function M.unattach()
 	M.buf_to_status_map[bufnr] = nil
 	M.clear_namespace_for_current_buffer(bufnr)
 	vim.api.nvim_clear_autocmds({ group = inline_testing_augroup, pattern = buf_name })
+
+	if jobId ~= nil then
+		vim.fn.jobstop(jobId)
+	end
 	vim.notify("Jesting unattached from " .. buf_name, vim.log.levels.INFO, { title = "Jesting" })
 end
 
 function M.attach(cmd, single_test)
+	-- force killing any running jobs
+	if jobId ~= nil then
+		vim.fn.jobstop(jobId)
+	end
 	local buf_name = vim.api.nvim_buf_get_name(0)
 	local buf_nr = vim.api.nvim_get_current_buf()
 	M.buf_to_status_map[buf_nr] = STATUS_MAP["ATTACHED"]
+
+	vim.api.nvim_create_autocmd("VimLeave", {
+		group = inline_testing_augroup,
+		callback = function()
+			-- force killing any running jobs
+			if jobId ~= nil then
+				vim.fn.jobstop(jobId)
+			end
+		end,
+	})
+
 	vim.api.nvim_create_autocmd("BufWritePost", {
 		group = inline_testing_augroup,
 		pattern = buf_name,
@@ -92,7 +113,11 @@ function M.attach(cmd, single_test)
 				line_num = line_num + 1
 			end
 
-			vim.fn.jobstart(cmd, {
+			if jobId ~= nil then
+				return
+			end
+
+			jobId = vim.fn.jobstart(cmd, {
 				stdout_buffered = true,
 				--nx sends output to stderr when uing the --json flag
 				on_stdout = function(j, data)
@@ -101,6 +126,10 @@ function M.attach(cmd, single_test)
 
 				on_stderr = function(_, data)
 					for _, result in ipairs(data) do
+						if string.match(result, "Test results written to") then
+							M.on_test_run_complete(bufnr)
+						end
+
 						local match_console_marker = string.match(result, "console.log")
 						local match_console_warn_marker = string.match(result, "console.warn")
 						if match_console_marker or match_console_warn_marker ~= nil then
@@ -118,89 +147,89 @@ function M.attach(cmd, single_test)
 					end
 				end,
 				on_exit = function(data, code)
-					-- first check to see if we have the circular JSON serialization error
-					for _, result in ipairs(std_out_messages) do
-						if string.match(result, "starting at object with constructor 'Object'") then
-							vim.notify(vim.inspect(std_out_messages), vim.log.levels.ERROR, { title = "Jesting" })
-							return
-						end
-					end
-
-					-- read in JSON file
-					local file = io.open("/tmp/results.json", "r")
-					if file ~= nil then
-						local json = file:read("*all")
-						local results = vim.fn.json_decode(json)
-						file:close()
-
-						-- get the test results
-						local testResults = results.testResults[1].assertionResults
-
-						if
-							#results.testResults == 1
-							and string.match(results.testResults[1].message, "Test suite failed to run")
-						then
-							-- concat the cmd table together into a single string
-							local cmd_str = ""
-							for _, v in ipairs(cmd) do
-								cmd_str = cmd_str .. v .. " "
-							end
-
-							vim.notify(
-								"Jesting failed to run " .. cmd_str .. "\n" .. results.testResults[1].message,
-								vim.log.levels.ERROR,
-								{ title = "Jesting" }
-							)
-
-							M.clear_namespace_for_current_buffer(bufnr)
-							return
-						end
-
-						-- -- make a map of test name to result
-						local testMap = {}
-						for _, result in ipairs(testResults) do
-							-- table.insert(testMap, {name = result.title, status = result.status})
-							testMap[result.title] =
-								{ status = result.status, error_message = result.failureMessages[1] }
-						end
-
-						-- assemble the test results in to the inline_testing_results table
-						line_num = 0
-						for _, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
-							-- get the test name from the it statement
-							local test = M.get_matching_it_statements_for_line(line)
-							if test ~= nil then
-								local result = testMap[test]
-								if result ~= nil and (result.status == "passed" or result.status == "failed") then
-									table.insert(inline_testing_results, {
-										name = test,
-										line_num = line_num,
-										passed = result.status == "passed",
-										error_message = result.error_message,
-									})
-								end
-							end
-							line_num = line_num + 1
-						end
-
-						local any_failures = false
-						for _, result in ipairs(inline_testing_results) do
-							if not result.passed then
-								any_failures = true
-								break
-							end
-						end
-
-						if any_failures then
-							M.buf_to_status_map[bufnr] = STATUS_MAP["FAILED"]
-						else
-							M.buf_to_status_map[bufnr] = STATUS_MAP["PASSED"]
-						end
-
-						M.open_console_log_win()
-						M.clear_namespace_for_current_buffer(args.buf)
-						M.add_extmark_to_test_result(args.buf, inline_testing_results)
-					end
+					-- -- first check to see if we have the circular JSON serialization error
+					-- for _, result in ipairs(std_out_messages) do
+					-- 	if string.match(result, "starting at object with constructor 'Object'") then
+					-- 		vim.notify(vim.inspect(std_out_messages), vim.log.levels.ERROR, { title = "Jesting" })
+					-- 		return
+					-- 	end
+					-- end
+					--
+					-- -- read in JSON file
+					-- local file = io.open("/tmp/results.json", "r")
+					-- if file ~= nil then
+					-- 	local json = file:read("*all")
+					-- 	local results = vim.fn.json_decode(json)
+					-- 	file:close()
+					--
+					-- 	-- get the test results
+					-- 	local testResults = results.testResults[1].assertionResults
+					--
+					-- 	if
+					-- 		#results.testResults == 1
+					-- 		and string.match(results.testResults[1].message, "Test suite failed to run")
+					-- 	then
+					-- 		-- concat the cmd table together into a single string
+					-- 		local cmd_str = ""
+					-- 		for _, v in ipairs(cmd) do
+					-- 			cmd_str = cmd_str .. v .. " "
+					-- 		end
+					--
+					-- 		vim.notify(
+					-- 			"Jesting failed to run " .. cmd_str .. "\n" .. results.testResults[1].message,
+					-- 			vim.log.levels.ERROR,
+					-- 			{ title = "Jesting" }
+					-- 		)
+					--
+					-- 		M.clear_namespace_for_current_buffer(bufnr)
+					-- 		return
+					-- 	end
+					--
+					-- 	-- -- make a map of test name to result
+					-- 	local testMap = {}
+					-- 	for _, result in ipairs(testResults) do
+					-- 		-- table.insert(testMap, {name = result.title, status = result.status})
+					-- 		testMap[result.title] =
+					-- 			{ status = result.status, error_message = result.failureMessages[1] }
+					-- 	end
+					--
+					-- 	-- assemble the test results in to the inline_testing_results table
+					-- 	line_num = 0
+					-- 	for _, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
+					-- 		-- get the test name from the it statement
+					-- 		local test = M.get_matching_it_statements_for_line(line)
+					-- 		if test ~= nil then
+					-- 			local result = testMap[test]
+					-- 			if result ~= nil and (result.status == "passed" or result.status == "failed") then
+					-- 				table.insert(inline_testing_results, {
+					-- 					name = test,
+					-- 					line_num = line_num,
+					-- 					passed = result.status == "passed",
+					-- 					error_message = result.error_message,
+					-- 				})
+					-- 			end
+					-- 		end
+					-- 		line_num = line_num + 1
+					-- 	end
+					--
+					-- 	local any_failures = false
+					-- 	for _, result in ipairs(inline_testing_results) do
+					-- 		if not result.passed then
+					-- 			any_failures = true
+					-- 			break
+					-- 		end
+					-- 	end
+					--
+					-- 	if any_failures then
+					-- 		M.buf_to_status_map[bufnr] = STATUS_MAP["FAILED"]
+					-- 	else
+					-- 		M.buf_to_status_map[bufnr] = STATUS_MAP["PASSED"]
+					-- 	end
+					--
+					-- 	M.open_console_log_win()
+					-- 	M.clear_namespace_for_current_buffer(args.buf)
+					-- 	M.add_extmark_to_test_result(args.buf, inline_testing_results)
+					-- end
 				end,
 			})
 		end,
@@ -321,5 +350,88 @@ end
 function M.setup(user_config)
 	-- override default config with user config
 	config = vim.tbl_deep_extend("force", config, user_config)
+end
+
+function M.on_test_run_complete(bufnr)
+	print("on_test_run_complete")
+	-- first check to see if we have the circular JSON serialization error
+	for _, result in ipairs(std_out_messages) do
+		if string.match(result, "starting at object with constructor 'Object'") then
+			vim.notify(vim.inspect(std_out_messages), vim.log.levels.ERROR, { title = "Jesting" })
+			return
+		end
+	end
+
+	-- read in JSON file
+	local file = io.open("/tmp/results.json", "r")
+	if file ~= nil then
+		local json = file:read("*all")
+		local results = vim.fn.json_decode(json)
+		file:close()
+
+		-- get the test results
+		local testResults = results.testResults[1].assertionResults
+
+		if #results.testResults == 1 and string.match(results.testResults[1].message, "Test suite failed to run") then
+			-- concat the cmd table together into a single string
+			local cmd_str = ""
+			-- for _, v in ipairs(cmd) do
+			-- 	cmd_str = cmd_str .. v .. " "
+			-- end
+
+			vim.notify(
+				"Jesting failed to run " .. cmd_str .. "\n" .. results.testResults[1].message,
+				vim.log.levels.ERROR,
+				{ title = "Jesting" }
+			)
+
+			M.clear_namespace_for_current_buffer(bufnr)
+			return
+		end
+
+		-- -- make a map of test name to result
+		local testMap = {}
+		for _, result in ipairs(testResults) do
+			-- table.insert(testMap, {name = result.title, status = result.status})
+			testMap[result.title] = { status = result.status, error_message = result.failureMessages[1] }
+		end
+
+		-- assemble the test results in to the inline_testing_results table
+		local line_num = 0
+		for _, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
+			-- get the test name from the it statement
+			local test = M.get_matching_it_statements_for_line(line)
+			if test ~= nil then
+				local result = testMap[test]
+				if result ~= nil and (result.status == "passed" or result.status == "failed") then
+					table.insert(inline_testing_results, {
+						name = test,
+						line_num = line_num,
+						passed = result.status == "passed",
+						error_message = result.error_message,
+					})
+				end
+			end
+			line_num = line_num + 1
+		end
+
+		local any_failures = false
+		for _, result in ipairs(inline_testing_results) do
+			if not result.passed then
+				any_failures = true
+				break
+			end
+		end
+
+		if any_failures then
+			M.buf_to_status_map[bufnr] = STATUS_MAP["FAILED"]
+		else
+			M.buf_to_status_map[bufnr] = STATUS_MAP["PASSED"]
+		end
+
+		M.open_console_log_win()
+		M.clear_namespace_for_current_buffer(bufnr)
+		M.add_extmark_to_test_result(bufnr, inline_testing_results)
+	end
 end
 return M
