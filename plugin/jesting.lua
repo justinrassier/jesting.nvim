@@ -1,5 +1,6 @@
 local jesting = require("jesting")
 local utils = require("jesting.utils")
+local path = require("plenary.path")
 
 vim.api.nvim_create_user_command("JestingAttachApi", function()
 	local current_buffer = vim.api.nvim_buf_get_name(0)
@@ -29,6 +30,13 @@ end, {})
 vim.api.nvim_create_user_command("JestingAttachNx", function()
 	local current_buffer = vim.api.nvim_buf_get_name(0)
 	local project_name = utils.get_project_name_from_path(current_buffer)
+
+	-- get the directory of this plugin
+	local plugin_dir = debug.getinfo(1).source:sub(2)
+	plugin_dir = path:new(plugin_dir):parent():parent()
+	local jesting_reporter_path = plugin_dir .. "/jesting-reporter.js"
+	print(jesting_reporter_path)
+
 	local cmd = {
 		"npx",
 		"nx",
@@ -40,6 +48,7 @@ vim.api.nvim_create_user_command("JestingAttachNx", function()
 		"--codeCoverage",
 		"false",
 		"--skip-nx-cache",
+		"--reporters=" .. jesting_reporter_path,
 		"--watch",
 	}
 

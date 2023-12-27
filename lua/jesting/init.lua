@@ -1,4 +1,5 @@
 local popup = require("plenary.popup")
+local Job = require("plenary.job")
 local M = {}
 
 local config = {
@@ -115,23 +116,31 @@ function M.attach(cmd, single_test)
 				line_num = line_num + 1
 			end
 
+			-- If we are already running a job, don't start another one
 			if jobId ~= nil then
 				return
 			end
 
 			jobId = vim.fn.jobstart(cmd, {
-				stdout_buffered = true,
+				-- stdout_buffered = true,
 				--nx sends output to stderr when uing the --json flag
 				on_stdout = function(j, data)
+					print("STDOUT", vim.inspect(data))
 					std_out_messages = data
 				end,
 
 				on_stderr = function(_, data)
+					print("STDERR", vim.inspect(data))
 					for _, result in ipairs(data) do
 						-- If the output has the following, then the test run is complete for this iteration of the watcher
 						if string.match(result, "Test results written to") then
 							M.on_test_run_complete(bufnr)
 						end
+
+						-- if the output hs the following, then the test run was kicked off again
+						-- if string.match(result, "RUNS") then
+						-- 	print("RUNS")
+						-- end
 
 						-- Capture console.log and console.warn messages for display in a window
 						local match_console_marker = string.match(result, "console.log")
@@ -158,7 +167,7 @@ function M.attach(cmd, single_test)
 		end,
 	})
 
-	vim.notify("Jesting attached to " .. buf_name, vim.log.levels.INFO, { title = "Jesting" })
+	-- vim.notify("Jesting attached to " .. buf_name, vim.log.levels.INFO, { title = "Jesting" })
 end
 
 function M.select_menu_item()
