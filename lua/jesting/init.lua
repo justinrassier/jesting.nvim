@@ -29,6 +29,14 @@ local STATUS_MAP = {
 	["FAILED"] = "❌",
 }
 
+function clean_terminal_control_characters(text)
+	-- Pattern to match terminal control characters
+	local control_char_pattern = "\x1b%[%d*[%a-zA-Z]"
+	-- Remove all terminal control characters
+	local cleaned_input = text:gsub(control_char_pattern, "")
+	return cleaned_input
+end
+
 function M.lualine_status()
 	local current_buf_nr = vim.api.nvim_get_current_buf()
 	local jesting_status = M.buf_to_status_map[current_buf_nr]
@@ -128,6 +136,7 @@ function M.attach(cmd, single_test)
 
 				on_stderr = function(_, data)
 					for _, result in ipairs(data) do
+						result = clean_terminal_control_characters(result)
 						-- If the output has the following, then the test run is complete for this iteration of the watcher
 						if string.match(result, "Test results written to") then
 							M.on_test_run_complete(bufnr)
@@ -188,7 +197,7 @@ function M.add_extmark_to_test_result(bufnr, test_results)
 				end_lnum = result.line_num,
 				end_col = 0,
 				severity = vim.diagnostic.severity.ERROR,
-				message = "Test Failed: " .. result.error_message,
+				message = "Test Failed: " .. clean_terminal_control_characters(result.error_message),
 			})
 		end
 	end
@@ -230,7 +239,7 @@ function M.open_console_log_win()
 		if console_log_buf == nil then
 			console_log_buf = vim.api.nvim_get_current_buf()
 			-- set buffer to be a scratch buffer
-			vim.api.nvim_buf_set_option(console_log_buf, "buflisted", false)
+			vim.api.nvim_buf_set_option_value(console_log_buf, "buflisted", false)
 		end
 		vim.api.nvim_buf_set_lines(console_log_buf, 0, -1, false, console_logs)
 		vim.api.nvim_win_set_buf(console_log_win, console_log_buf)

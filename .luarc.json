@@ -1,0 +1,5 @@
+{
+    "diagnostics.globals": [
+        "clean_terminal_control_characters"
+    ]
+}
